@@ -74,8 +74,8 @@ validate_config()
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 app.config['SECRET_KEY'] = os.urandom(24)
 
-# Initialize SocketIO with gevent
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
+# Initialize SocketIO with threading mode
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 # Initialize database
 init_db()
