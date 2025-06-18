@@ -3,6 +3,7 @@ import requests
 import traceback
 import time
 import os
+import logging
 from config import (
     AZURE_SPEECH_KEY,
     AZURE_SPEECH_REGION,
@@ -14,7 +15,6 @@ from config import (
 from database import save_meeting
 from flask_socketio import SocketIO
 from openai import AzureOpenAI
-import logging
 import json
 
 # Configure logging
@@ -35,7 +35,18 @@ class MeetingTranscriber:
             # Set environment variables for audio
             os.environ['PULSE_SERVER'] = 'unix:/tmp/pulse/native'
             os.environ['PULSE_COOKIE'] = '/tmp/pulse/cookie'
+            os.environ['PULSE_CLIENTCONFIG'] = '/tmp/pulse/client.conf'
             
+            # Create PulseAudio client config
+            with open('/tmp/pulse/client.conf', 'w') as f:
+                f.write("""
+default-server = unix:/tmp/pulse/native
+autospawn = no
+daemon-binary = /bin/true
+enable-shm = false
+""")
+            
+            logger.info("Initializing speech configuration...")
             self.speech_config = speechsdk.SpeechConfig(
                 subscription=AZURE_SPEECH_KEY,
                 region=AZURE_SPEECH_REGION
@@ -66,11 +77,16 @@ class MeetingTranscriber:
             
             # Configure audio with fallback options
             try:
+                logger.info("Attempting to use default microphone...")
                 self.audio_config = speechsdk.audio.AudioConfig(use_default_microphone=True)
             except Exception as e:
                 logger.warning(f"Failed to use default microphone: {str(e)}")
-                # Fallback to default audio input
-                self.audio_config = speechsdk.audio.AudioConfig()
+                try:
+                    logger.info("Attempting to use default audio input...")
+                    self.audio_config = speechsdk.audio.AudioConfig()
+                except Exception as e:
+                    logger.error(f"Failed to configure audio: {str(e)}")
+                    raise
             
             self.transcript = []
             self.speaker_transcript = []  # Store speaker-specific transcript
@@ -152,29 +168,38 @@ class MeetingTranscriber:
     def start_recording(self):
         """Start the speech recognition session"""
         try:
-            print("Starting recording...")
-            print("Configuring audio input...")
+            logger.info("Starting recording...")
+            logger.info("Configuring audio input...")
             
-            # Create speech recognizer
-            self.recognizer = speechsdk.SpeechRecognizer(
-                speech_config=self.speech_config,
-                audio_config=self.audio_config
-            )
+            # Create speech recognizer with error handling
+            try:
+                self.recognizer = speechsdk.SpeechRecognizer(
+                    speech_config=self.speech_config,
+                    audio_config=self.audio_config
+                )
+            except Exception as e:
+                logger.error(f"Error creating speech recognizer: {str(e)}")
+                # Try alternative configuration
+                logger.info("Attempting alternative audio configuration...")
+                self.audio_config = speechsdk.audio.AudioConfig()
+                self.recognizer = speechsdk.SpeechRecognizer(
+                    speech_config=self.speech_config,
+                    audio_config=self.audio_config
+                )
             
             # Connect event handlers
-            print("Connecting event handlers...")
+            logger.info("Connecting event handlers...")
             self.recognizer.recognized.connect(self.handle_result)
             self.recognizer.canceled.connect(self.handle_canceled)
             self.recognizer.session_started.connect(self.handle_session_started)
             self.recognizer.session_stopped.connect(self.handle_session_stopped)
             
-            print("Starting continuous recognition...")
+            logger.info("Starting continuous recognition...")
             self.recognizer.start_continuous_recognition()
-            print("Recording started successfully")
+            logger.info("Recording started successfully")
         except Exception as e:
-            print(f"Error starting recording: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"Error starting recording: {str(e)}")
+            logger.error(traceback.format_exc())
             raise
 
     def stop_recording(self):
