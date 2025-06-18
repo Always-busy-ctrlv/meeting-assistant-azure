@@ -71,7 +71,7 @@ validate_config()
 # Initialize Flask app
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 app.config['SECRET_KEY'] = os.urandom(24)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 # Initialize database
 init_db()
@@ -148,46 +148,39 @@ print(f"Deployment Name: {DEPLOYMENT_NAME}")
 
 @app.route('/')
 def index():
-    return make_response(render_template('index.html'))
+    return render_template('index.html')
 
 @app.route('/meetings')
 def list_meetings():
     meetings = get_all_meetings()
     return make_response(jsonify(meetings))
 
-@app.route('/start_meeting', methods=['POST'])
+@app.route('/api/start', methods=['POST'])
 def start_meeting():
-    global transcriber
     try:
-        logger.info("Starting new meeting...")
         transcriber.start_transcription()
-        logger.info("Meeting started successfully")
-        return make_response(jsonify({'status': 'success', 'message': 'Meeting started'}))
+        return jsonify({"status": "success", "message": "Transcription started"})
     except Exception as e:
         logger.error(f"Error starting meeting: {str(e)}")
-        return make_response(jsonify({'status': 'error', 'message': str(e)}), 500)
+        return jsonify({"status": "error", "message": str(e)}), 500
 
-@app.route('/end_meeting', methods=['POST'])
-def end_meeting():
-    global transcriber
+@app.route('/api/stop', methods=['POST'])
+def stop_meeting():
     try:
-        logger.info("Ending meeting...")
-        if transcriber:
-            transcript = transcriber.stop_transcription()
-            summary = transcriber.generate_summary(transcript)
-            save_meeting(transcript, summary)
-            logger.info("Meeting ended successfully")
-            return make_response(jsonify({
-                'status': 'success',
-                'message': 'Meeting ended',
-                'summary': summary
-            }))
-        else:
-            logger.error("No active meeting to end")
-            return make_response(jsonify({'status': 'error', 'message': 'No active meeting'}), 400)
+        transcriber.stop_transcription()
+        return jsonify({"status": "success", "message": "Transcription stopped"})
     except Exception as e:
-        logger.error(f"Error ending meeting: {str(e)}")
-        return make_response(jsonify({'status': 'error', 'message': str(e)}), 500)
+        logger.error(f"Error stopping meeting: {str(e)}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/summary', methods=['GET'])
+def get_summary():
+    try:
+        summary = transcriber.get_summary()
+        return jsonify({"status": "success", "summary": summary})
+    except Exception as e:
+        logger.error(f"Error getting summary: {str(e)}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/send_email', methods=['POST'])
 def send_email():

@@ -22,36 +22,18 @@ apt-get install -y \
     portaudio19-dev \
     python3-pyaudio
 
-# Create PulseAudio directories and set permissions
+# Create and configure PulseAudio
 mkdir -p /tmp/pulse
 chmod 777 /tmp/pulse
-
-# Create PulseAudio client configuration
 cat > /tmp/pulse/client.conf << EOF
 default-server = unix:/tmp/pulse/native
 autospawn = no
 daemon-binary = /bin/true
 enable-shm = false
 EOF
-
-# Set permissions for client configuration
 chmod 644 /tmp/pulse/client.conf
 
-# Start PulseAudio in system mode
-pulseaudio --system --disallow-exit --no-cpu-limit --exit-idle-time=-1 &
-
-# Wait for PulseAudio to start
-sleep 2
-
-# Create a cookie file
-pactl load-module module-native-protocol-unix socket=/tmp/pulse/native
-pactl load-module module-simple-protocol-tcp
-
-# Set permissions
-chmod 777 /tmp/pulse/native
-chmod 777 /tmp/pulse/cookie
-
-# Create and activate virtual environment if it doesn't exist
+# Create virtual environment if it doesn't exist
 if [ ! -d "antenv" ]; then
     echo "Creating virtual environment..."
     python -m venv antenv
@@ -63,10 +45,10 @@ source antenv/bin/activate
 # Install Python packages
 echo "Installing Python packages..."
 pip install --upgrade pip
-pip install setuptools
+pip install setuptools wheel
 pip install -r requirements.txt
 
 # Start the application with Gunicorn
 echo "Starting application..."
 cd /home/site/wwwroot
-gunicorn --bind=0.0.0.0:8000 --timeout 600 --workers 4 --threads 8 --worker-class gevent --log-level info wsgi:app 
+gunicorn --bind=0.0.0.0:8000 --timeout 600 --workers 4 --threads 8 --worker-class gthread --log-level info wsgi:app 

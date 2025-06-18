@@ -2,8 +2,6 @@ flask==3.0.2
 flask-socketio==5.3.6
 python-socketio==5.11.1
 python-engineio==4.9.0
-gevent==24.2.1
-gevent-websocket==0.10.1
 gunicorn==21.2.0
 azure-cognitiveservices-speech==1.44.0
 openai==1.12.0
