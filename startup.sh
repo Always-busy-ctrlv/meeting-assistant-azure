@@ -5,6 +5,7 @@ echo "Deploying Python application..."
 # Set environment variables
 export SCM_DO_BUILD_DURING_DEPLOYMENT=true
 export WEBSITE_RUN_FROM_PACKAGE=1
+export PYTHONPATH=/home/site/wwwroot
 
 # Create and activate virtual environment if it doesn't exist
 if [ ! -d "/home/site/wwwroot/antenv" ]; then
@@ -26,4 +27,4 @@ pip install -r /home/site/wwwroot/requirements.txt
 # Start the application
 echo "Starting application..."
 cd /home/site/wwwroot
-gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 120 app:app 
+gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 120 wsgi:app 
