@@ -22,4 +22,4 @@ pip install -r /home/site/wwwroot/requirements.txt
 # Start the application
 echo "Starting application..."
 cd /home/site/wwwroot
-gunicorn --bind=0.0.0.0:$PORT --worker-class eventlet --workers 1 --timeout 120 --keepalive 5 --access-logfile - --error-logfile - --log-level info app:app 
+gunicorn --bind=0.0.0.0:$PORT --worker-class=eventlet --workers=1 --timeout=120 --keep-alive=5 --access-logfile=- --error-logfile=- --log-level=info app:app 
