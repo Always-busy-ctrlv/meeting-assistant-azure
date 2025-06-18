@@ -37,14 +37,22 @@ class MeetingTranscriber:
             os.environ['PULSE_COOKIE'] = '/tmp/pulse/cookie'
             os.environ['PULSE_CLIENTCONFIG'] = '/tmp/pulse/client.conf'
             
-            # Create PulseAudio client config
-            with open('/tmp/pulse/client.conf', 'w') as f:
-                f.write("""
+            # Ensure PulseAudio directories exist
+            pulse_dir = '/tmp/pulse'
+            if not os.path.exists(pulse_dir):
+                os.makedirs(pulse_dir, mode=0o777)
+            
+            # Create PulseAudio client config if it doesn't exist
+            client_conf = '/tmp/pulse/client.conf'
+            if not os.path.exists(client_conf):
+                with open(client_conf, 'w') as f:
+                    f.write("""
 default-server = unix:/tmp/pulse/native
 autospawn = no
 daemon-binary = /bin/true
 enable-shm = false
 """)
+                os.chmod(client_conf, 0o644)
             
             logger.info("Initializing speech configuration...")
             self.speech_config = speechsdk.SpeechConfig(
