@@ -12,9 +12,8 @@ from config import (
     AZURE_OPENAI_API_VERSION,
     AZURE_OPENAI_DEPLOYMENT
 )
-from database import save_meeting
+import openai
 from flask_socketio import SocketIO
-from openai import AzureOpenAI
 import json
 
 # Configure logging
@@ -22,11 +21,10 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # Configure OpenAI client
-client = AzureOpenAI(
-    api_key=AZURE_OPENAI_API_KEY,
-    api_version=AZURE_OPENAI_API_VERSION,
-    azure_endpoint=AZURE_OPENAI_ENDPOINT
-)
+openai.api_type = "azure"
+openai.api_base = AZURE_OPENAI_ENDPOINT
+openai.api_version = AZURE_OPENAI_API_VERSION
+openai.api_key = AZURE_OPENAI_API_KEY
 
 class MeetingTranscriber:
     def __init__(self, socketio=None):
@@ -254,7 +252,7 @@ enable-shm = false
             print(f"Using endpoint: {AZURE_OPENAI_ENDPOINT}")
             print(f"Transcript length: {len(transcript)} characters")
             
-            response = client.chat.completions.create(
+            response = openai.ChatCompletion.create(
                 model=AZURE_OPENAI_DEPLOYMENT,
                 messages=[
                     {"role": "system", "content": """You are a helpful assistant that summarizes meeting transcripts. 

@@ -20,7 +20,7 @@ from transcriber import MeetingTranscriber
 from email_service import send_meeting_summary
 import logging
 from werkzeug.exceptions import HTTPException
-from openai import AzureOpenAI
+import openai
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -85,12 +85,11 @@ EMAIL_PASSWORD = os.getenv('EMAIL_PASSWORD')
 EMAIL_SMTP_SERVER = os.getenv('EMAIL_SMTP_SERVER')
 EMAIL_SMTP_PORT = int(os.getenv('EMAIL_SMTP_PORT'))
 
-# Initialize OpenAI client
-client = AzureOpenAI(
-    api_key=AZURE_OPENAI_API_KEY,
-    api_version=AZURE_OPENAI_API_VERSION,
-    azure_endpoint=AZURE_OPENAI_ENDPOINT
-)
+# Configure OpenAI client
+openai.api_type = "azure"
+openai.api_base = AZURE_OPENAI_ENDPOINT
+openai.api_version = AZURE_OPENAI_API_VERSION
+openai.api_key = AZURE_OPENAI_API_KEY
 
 # Initialize transcriber
 transcriber = MeetingTranscriber(socketio)
