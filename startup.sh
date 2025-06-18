@@ -25,30 +25,28 @@ apt-get install -y \
 # Create and configure PulseAudio
 mkdir -p /tmp/pulse
 chmod 777 /tmp/pulse
-cat > /tmp/pulse/client.conf << EOF
-default-server = unix:/tmp/pulse/native
-autospawn = no
-daemon-binary = /bin/true
-enable-shm = false
-EOF
+echo "default-server = unix:/tmp/pulse/native" > /tmp/pulse/client.conf
+echo "autospawn = yes" >> /tmp/pulse/client.conf
+echo "daemon-binary = /usr/bin/pulseaudio" >> /tmp/pulse/client.conf
+echo "enable-shm = yes" >> /tmp/pulse/client.conf
 chmod 644 /tmp/pulse/client.conf
 
 # Create virtual environment if it doesn't exist
-if [ ! -d "antenv" ]; then
+if [ ! -d "venv" ]; then
     echo "Creating virtual environment..."
-    python -m venv antenv
+    python -m venv venv
 fi
 
 # Activate virtual environment
-source antenv/bin/activate
+source venv/bin/activate
 
 # Install Python packages
 echo "Installing Python packages..."
-pip install --upgrade pip
+python -m pip install --upgrade pip
 pip install setuptools wheel
 pip install -r requirements.txt
 
 # Start the application with Gunicorn
 echo "Starting application..."
 cd /home/site/wwwroot
-gunicorn --bind=0.0.0.0:8000 --timeout 600 --workers 1 --worker-class eventlet --log-level info --chdir /home/site/wwwroot wsgi:app 
+gunicorn --bind=0.0.0.0:8000 --timeout 600 --workers 1 --worker-class gevent --log-level info --chdir /home/site/wwwroot wsgi:app 

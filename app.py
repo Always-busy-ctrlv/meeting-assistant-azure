@@ -21,13 +21,11 @@ from email_service import send_meeting_summary
 import logging
 from werkzeug.exceptions import HTTPException
 import openai
-import eventlet
-
-# Configure eventlet
-eventlet.monkey_patch()
+from azure.identity import DefaultAzureCredential
+from azure.keyvault.secrets import SecretClient
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Print current working directory
@@ -75,7 +73,9 @@ validate_config()
 # Initialize Flask app
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 app.config['SECRET_KEY'] = os.urandom(24)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+
+# Initialize SocketIO with gevent
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
 
 # Initialize database
 init_db()
@@ -89,11 +89,22 @@ EMAIL_PASSWORD = os.getenv('EMAIL_PASSWORD')
 EMAIL_SMTP_SERVER = os.getenv('EMAIL_SMTP_SERVER')
 EMAIL_SMTP_PORT = int(os.getenv('EMAIL_SMTP_PORT'))
 
+# Initialize Azure Key Vault client
+key_vault_url = os.getenv('AZURE_KEY_VAULT_URL')
+credential = DefaultAzureCredential()
+secret_client = SecretClient(vault_url=key_vault_url, credential=credential)
+
+# Get secrets from Key Vault
+openai_api_key = secret_client.get_secret('openai-api-key').value
+openai_api_base = secret_client.get_secret('openai-api-base').value
+openai_api_version = secret_client.get_secret('openai-api-version').value
+openai_api_type = secret_client.get_secret('openai-api-type').value
+
 # Configure OpenAI client
-openai.api_type = "azure"
-openai.api_base = AZURE_OPENAI_ENDPOINT
-openai.api_version = AZURE_OPENAI_API_VERSION
-openai.api_key = AZURE_OPENAI_API_KEY
+openai.api_key = openai_api_key
+openai.api_base = openai_api_base
+openai.api_version = openai_api_version
+openai.api_type = openai_api_type
 
 # Initialize transcriber
 transcriber = MeetingTranscriber(socketio)
@@ -158,23 +169,33 @@ def list_meetings():
     meetings = get_all_meetings()
     return make_response(jsonify(meetings))
 
-@app.route('/api/start', methods=['POST'])
-def start_meeting():
+@socketio.on('start_meeting')
+def handle_start_meeting():
     try:
         transcriber.start_transcription()
-        return jsonify({"status": "success", "message": "Transcription started"})
+        emit('meeting_started', {'status': 'success'})
     except Exception as e:
         logger.error(f"Error starting meeting: {str(e)}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+        emit('error', {'message': str(e)})
 
-@app.route('/api/stop', methods=['POST'])
-def stop_meeting():
+@socketio.on('stop_meeting')
+def handle_stop_meeting():
     try:
         transcriber.stop_transcription()
-        return jsonify({"status": "success", "message": "Transcription stopped"})
+        emit('meeting_stopped', {'status': 'success'})
     except Exception as e:
         logger.error(f"Error stopping meeting: {str(e)}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+        emit('error', {'message': str(e)})
+
+@socketio.on('transcription')
+def handle_transcription(data):
+    try:
+        text = data.get('text', '')
+        if text:
+            transcriber.process_transcription(text)
+    except Exception as e:
+        logger.error(f"Error processing transcription: {str(e)}")
+        emit('error', {'message': str(e)})
 
 @app.route('/api/summary', methods=['GET'])
 def get_summary():
@@ -251,5 +272,5 @@ if __name__ == '__main__':
             os.makedirs(subdir_path)
     
     # Start the application
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 8000))
     socketio.run(app, host='0.0.0.0', port=port, debug=False) 
