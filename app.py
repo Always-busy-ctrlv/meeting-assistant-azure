@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from flask import Flask, render_template, jsonify, request, make_response
+from flask import Flask, render_template, jsonify, request, make_response, send_from_directory
 from flask_socketio import SocketIO
 import azure.cognitiveservices.speech as speechsdk
 import requests
@@ -68,7 +68,7 @@ if missing_vars:
 validate_config()
 
 # Initialize Flask app
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static', static_url_path='/static')
 app.config['SECRET_KEY'] = 'your-secret-key'
 socketio = SocketIO(app, cors_allowed_origins="*")
 
@@ -198,59 +198,52 @@ def send_email():
         logger.error(f"Error sending email: {str(e)}")
         return make_response(jsonify({'status': 'error', 'message': str(e)}), 500)
 
+@app.route('/static/<path:filename>')
+def serve_static(filename):
+    try:
+        return send_from_directory(app.static_folder, filename)
+    except Exception as e:
+        logger.error(f"Error serving static file {filename}: {str(e)}")
+        return make_response(jsonify({'status': 'error', 'message': 'File not found'}), 404)
+
 @socketio.on('connect')
 def handle_connect():
-    logger.info('Client connected')
+    logger.info("Client connected")
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    logger.info('Client disconnected')
+    logger.info("Client disconnected")
 
 @app.errorhandler(Exception)
 def handle_error(e):
-    logger.error(f"Unhandled error: {str(e)}")
     if isinstance(e, HTTPException):
-        return jsonify({
-            'status': 'error',
-            'message': e.description
-        }), e.code
-    return jsonify({
+        response = e.get_response()
+        response.data = json.dumps({
+            "code": e.code,
+            "name": e.name,
+            "description": e.description,
+        })
+        response.content_type = "application/json"
+        return response
+    
+    logger.error(f"Unhandled error: {str(e)}")
+    return make_response(jsonify({
         'status': 'error',
-        'message': 'Internal server error'
-    }), 500
+        'message': str(e)
+    }), 500)
 
 if __name__ == '__main__':
-    try:
-        init_db()
-        # Get port from environment variable (Azure App Service sets this)
-        port = int(os.getenv('PORT', 5000))
-        
-        # Always use Gunicorn in production
-        from gunicorn.app.base import BaseApplication
-
-        class SocketIOApplication(BaseApplication):
-            def __init__(self, app, options=None):
-                self.options = options or {}
-                self.application = app
-                super().__init__()
-
-            def load_config(self):
-                for key, value in self.options.items():
-                    self.cfg.set(key, value)
-
-            def load(self):
-                return self.application
-
-        options = {
-            'bind': f'0.0.0.0:{port}',
-            'workers': 1,
-            'threads': 8,
-            'timeout': 120,
-            'accesslog': '-',
-            'errorlog': '-',
-            'loglevel': 'info'
-        }
-        SocketIOApplication(app, options).run()
-    except Exception as e:
-        logger.error(f"Failed to start server: {str(e)}")
-        raise 
+    # Create static directory if it doesn't exist
+    static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
+    if not os.path.exists(static_dir):
+        os.makedirs(static_dir)
+    
+    # Create static/css and static/js directories
+    for subdir in ['css', 'js']:
+        subdir_path = os.path.join(static_dir, subdir)
+        if not os.path.exists(subdir_path):
+            os.makedirs(subdir_path)
+    
+    # Start the application
+    port = int(os.environ.get('PORT', 5000))
+    socketio.run(app, host='0.0.0.0', port=port, debug=False) 
