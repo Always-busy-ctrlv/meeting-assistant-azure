@@ -15,6 +15,10 @@ fi
 # Activate virtual environment
 source /home/site/wwwroot/antenv/bin/activate
 
+# Install setuptools first
+echo "Installing setuptools..."
+pip install --upgrade pip setuptools wheel
+
 # Install requirements
 echo "Installing requirements..."
 pip install -r /home/site/wwwroot/requirements.txt
@@ -22,4 +26,4 @@ pip install -r /home/site/wwwroot/requirements.txt
 # Start the application
 echo "Starting application..."
 cd /home/site/wwwroot
-gunicorn --bind 0.0.0.0:$PORT --worker-class eventlet app:app 
+gunicorn --bind 0.0.0.0:$PORT --worker-class gevent app:app 
