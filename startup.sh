@@ -6,6 +6,24 @@ echo "Deploying Python application..."
 export SCM_DO_BUILD_DURING_DEPLOYMENT=true
 export WEBSITE_RUN_FROM_PACKAGE=1
 export PYTHONPATH=/home/site/wwwroot
+export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu
+
+# Install system dependencies
+echo "Installing system dependencies..."
+apt-get update
+apt-get install -y \
+    libssl1.1 \
+    libasound2 \
+    libpulse0 \
+    libpulse-dev \
+    libasound2-dev \
+    libffi-dev \
+    portaudio19-dev \
+    python3-pyaudio \
+    pulseaudio
+
+# Set up audio environment
+bash /home/site/wwwroot/setup_audio.sh
 
 # Create and activate virtual environment if it doesn't exist
 if [ ! -d "/home/site/wwwroot/antenv" ]; then

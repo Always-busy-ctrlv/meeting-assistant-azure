@@ -2,6 +2,7 @@ import azure.cognitiveservices.speech as speechsdk
 import requests
 import traceback
 import time
+import os
 from config import (
     AZURE_SPEECH_KEY,
     AZURE_SPEECH_REGION,
@@ -30,42 +31,58 @@ client = AzureOpenAI(
 class MeetingTranscriber:
     def __init__(self, socketio=None):
         """Initialize the transcriber with Azure Speech Services configuration."""
-        self.speech_config = speechsdk.SpeechConfig(
-            subscription=AZURE_SPEECH_KEY,
-            region=AZURE_SPEECH_REGION
-        )
-        self.speech_config.speech_recognition_language = "en-US"
-        
-        # Configure speech recognition settings
-        self.speech_config.set_property(
-            speechsdk.PropertyId.SpeechServiceConnection_InitialSilenceTimeoutMs,
-            "5000"
-        )
-        self.speech_config.set_property(
-            speechsdk.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs,
-            "5000"
-        )
-        
-        # Enable word-level timestamps for better speaker tracking
-        self.speech_config.set_property(
-            speechsdk.PropertyId.SpeechServiceResponse_RequestWordLevelTimestamps,
-            "true"
-        )
-        
-        # Enable detailed results
-        self.speech_config.set_property(
-            speechsdk.PropertyId.SpeechServiceResponse_RequestDetailedResultTrueFalse,
-            "true"
-        )
-        
-        self.audio_config = speechsdk.audio.AudioConfig(use_default_microphone=True)
-        self.transcript = []
-        self.speaker_transcript = []  # Store speaker-specific transcript
-        self.socketio = socketio
-        self.recognizer = None
-        self.current_speaker = None
-        self.speaker_count = 0
-        self.last_speaker_time = time.time()
+        try:
+            # Set environment variables for audio
+            os.environ['PULSE_SERVER'] = 'unix:/tmp/pulse/native'
+            os.environ['PULSE_COOKIE'] = '/tmp/pulse/cookie'
+            
+            self.speech_config = speechsdk.SpeechConfig(
+                subscription=AZURE_SPEECH_KEY,
+                region=AZURE_SPEECH_REGION
+            )
+            self.speech_config.speech_recognition_language = "en-US"
+            
+            # Configure speech recognition settings
+            self.speech_config.set_property(
+                speechsdk.PropertyId.SpeechServiceConnection_InitialSilenceTimeoutMs,
+                "5000"
+            )
+            self.speech_config.set_property(
+                speechsdk.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs,
+                "5000"
+            )
+            
+            # Enable word-level timestamps for better speaker tracking
+            self.speech_config.set_property(
+                speechsdk.PropertyId.SpeechServiceResponse_RequestWordLevelTimestamps,
+                "true"
+            )
+            
+            # Enable detailed results
+            self.speech_config.set_property(
+                speechsdk.PropertyId.SpeechServiceResponse_RequestDetailedResultTrueFalse,
+                "true"
+            )
+            
+            # Configure audio with fallback options
+            try:
+                self.audio_config = speechsdk.audio.AudioConfig(use_default_microphone=True)
+            except Exception as e:
+                logger.warning(f"Failed to use default microphone: {str(e)}")
+                # Fallback to default audio input
+                self.audio_config = speechsdk.audio.AudioConfig()
+            
+            self.transcript = []
+            self.speaker_transcript = []  # Store speaker-specific transcript
+            self.socketio = socketio
+            self.recognizer = None
+            self.current_speaker = None
+            self.speaker_count = 0
+            self.last_speaker_time = time.time()
+            
+        except Exception as e:
+            logger.error(f"Error initializing transcriber: {str(e)}")
+            raise
 
     def handle_result(self, evt):
         """Handle speech recognition results with speaker identification"""
