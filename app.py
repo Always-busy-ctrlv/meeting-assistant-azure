@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 from flask import Flask, render_template, jsonify, request, make_response, send_from_directory
-from flask_socketio import SocketIO
+from flask_socketio import SocketIO, emit
 import azure.cognitiveservices.speech as speechsdk
 import requests
 from dotenv import load_dotenv
@@ -14,12 +14,13 @@ from pathlib import Path
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from config import validate_config
+from config import validate_config, AZURE_SPEECH_KEY, AZURE_SPEECH_REGION, AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_VERSION, AZURE_OPENAI_DEPLOYMENT
 from database import init_db, get_all_meetings, update_meeting_participants, save_meeting
 from transcriber import MeetingTranscriber
 from email_service import send_meeting_summary
 import logging
 from werkzeug.exceptions import HTTPException
+from openai import AzureOpenAI
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -69,8 +70,8 @@ validate_config()
 
 # Initialize Flask app
 app = Flask(__name__, static_folder='static', static_url_path='/static')
-app.config['SECRET_KEY'] = 'your-secret-key'
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+app.config['SECRET_KEY'] = os.urandom(24)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
 
 # Initialize database
 init_db()
@@ -83,6 +84,16 @@ EMAIL_USER = os.getenv('EMAIL_USER')
 EMAIL_PASSWORD = os.getenv('EMAIL_PASSWORD')
 EMAIL_SMTP_SERVER = os.getenv('EMAIL_SMTP_SERVER')
 EMAIL_SMTP_PORT = int(os.getenv('EMAIL_SMTP_PORT'))
+
+# Initialize OpenAI client
+client = AzureOpenAI(
+    api_key=AZURE_OPENAI_API_KEY,
+    api_version=AZURE_OPENAI_API_VERSION,
+    azure_endpoint=AZURE_OPENAI_ENDPOINT
+)
+
+# Initialize transcriber
+transcriber = MeetingTranscriber(socketio)
 
 def send_email(to_emails, subject, body):
     try:
@@ -149,8 +160,7 @@ def start_meeting():
     global transcriber
     try:
         logger.info("Starting new meeting...")
-        transcriber = MeetingTranscriber(socketio)
-        transcriber.start_recording()
+        transcriber.start_transcription()
         logger.info("Meeting started successfully")
         return make_response(jsonify({'status': 'success', 'message': 'Meeting started'}))
     except Exception as e:
@@ -163,7 +173,7 @@ def end_meeting():
     try:
         logger.info("Ending meeting...")
         if transcriber:
-            transcript = transcriber.stop_recording()
+            transcript = transcriber.stop_transcription()
             summary = transcriber.generate_summary(transcript)
             save_meeting(transcript, summary)
             logger.info("Meeting ended successfully")

@@ -6,7 +6,8 @@ echo "Deploying Python application..."
 export SCM_DO_BUILD_DURING_DEPLOYMENT=true
 export WEBSITE_RUN_FROM_PACKAGE=1
 export PYTHONPATH=/home/site/wwwroot
-export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/usr/local/lib:$LD_LIBRARY_PATH
+export PYTHONUNBUFFERED=1
+export LD_LIBRARY_PATH=/home/site/wwwroot/lib:$LD_LIBRARY_PATH
 
 # Install system dependencies
 echo "Installing system dependencies..."
@@ -19,14 +20,7 @@ apt-get install -y \
     libasound2-dev \
     libffi-dev \
     portaudio19-dev \
-    python3-pyaudio \
-    pulseaudio \
-    libavcodec-dev \
-    libavformat-dev \
-    libavutil-dev \
-    libswresample-dev \
-    libavfilter-dev \
-    libavdevice-dev
+    python3-pyaudio
 
 # Create PulseAudio directories and set permissions
 mkdir -p /tmp/pulse
@@ -69,10 +63,10 @@ source antenv/bin/activate
 # Install Python packages
 echo "Installing Python packages..."
 pip install --upgrade pip
-pip install setuptools wheel
+pip install setuptools
 pip install -r requirements.txt
 
-# Start the application
+# Start the application with Gunicorn
 echo "Starting application..."
 cd /home/site/wwwroot
-gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 120 --worker-class eventlet wsgi:app 
+gunicorn --bind=0.0.0.0:8000 --timeout 600 --workers 4 --threads 8 --worker-class gevent --log-level info wsgi:app 
