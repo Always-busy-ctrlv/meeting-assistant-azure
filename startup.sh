@@ -26,4 +26,4 @@ pip install -r /home/site/wwwroot/requirements.txt
 # Start the application
 echo "Starting application..."
 cd /home/site/wwwroot
-gunicorn --bind 0.0.0.0:$PORT --worker-class gevent app:app 
+gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 120 app:app 

@@ -243,10 +243,9 @@ if __name__ == '__main__':
 
         options = {
             'bind': f'0.0.0.0:{port}',
-            'worker_class': 'eventlet',
             'workers': 1,
+            'threads': 8,
             'timeout': 120,
-            'keepalive': 5,
             'accesslog': '-',
             'errorlog': '-',
             'loglevel': 'info'
