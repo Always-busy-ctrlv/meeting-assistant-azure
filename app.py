@@ -23,7 +23,7 @@ from werkzeug.exceptions import HTTPException
 import openai
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
-from azure.openai import AzureOpenAI
+from azure.ai.openai import OpenAIClient
 from azure.storage.blob import BlobServiceClient
 from azure.cosmos import CosmosClient
 from azure.search.documents import SearchClient
@@ -126,10 +126,9 @@ transcriber = MeetingTranscriber(socketio)
 
 # Azure OpenAI Configuration
 try:
-    client = AzureOpenAI(
-        api_key=os.environ.get("AZURE_OPENAI_API_KEY"),
-        api_version=os.environ.get("AZURE_OPENAI_API_VERSION", "2024-02-15-preview"),
-        azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT")
+    client = OpenAIClient(
+        endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT"),
+        credential=os.environ.get("AZURE_OPENAI_API_KEY")
     )
     logger.info("Azure OpenAI client initialized successfully")
 except Exception as e:
