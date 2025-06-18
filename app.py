@@ -222,7 +222,33 @@ def handle_error(e):
 if __name__ == '__main__':
     try:
         init_db()
-        socketio.run(app, debug=True, host='0.0.0.0', port=5000)
+        # Check if we're in production (Azure App Service sets WEBSITE_RUN_FROM_PACKAGE)
+        if os.getenv('WEBSITE_RUN_FROM_PACKAGE') == '1':
+            # Production mode - use Gunicorn
+            from gunicorn.app.base import BaseApplication
+
+            class SocketIOApplication(BaseApplication):
+                def __init__(self, app, options=None):
+                    self.options = options or {}
+                    self.application = app
+                    super().__init__()
+
+                def load_config(self):
+                    for key, value in self.options.items():
+                        self.cfg.set(key, value)
+
+                def load(self):
+                    return self.application
+
+            options = {
+                'bind': '0.0.0.0:5000',
+                'worker_class': 'eventlet',
+                'workers': 1
+            }
+            SocketIOApplication(app, options).run()
+        else:
+            # Development mode - use Werkzeug
+            socketio.run(app, debug=True, host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True)
     except Exception as e:
         logger.error(f"Failed to start server: {str(e)}")
         raise 
