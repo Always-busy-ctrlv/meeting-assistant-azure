@@ -6,21 +6,11 @@ echo "Deploying Python application..."
 export SCM_DO_BUILD_DURING_DEPLOYMENT=true
 export WEBSITE_RUN_FROM_PACKAGE=1
 export PYTHONPATH=/home/site/wwwroot
-export PYTHONUNBUFFERED=1
-export LD_LIBRARY_PATH=/home/site/wwwroot/lib:$LD_LIBRARY_PATH
 
 # Install system dependencies
 echo "Installing system dependencies..."
 apt-get update
-apt-get install -y \
-    libssl1.1 \
-    libasound2 \
-    libpulse0 \
-    libpulse-dev \
-    libasound2-dev \
-    libffi-dev \
-    portaudio19-dev \
-    python3-pyaudio
+apt-get install -y libssl1.1 libasound2 python3-pyaudio
 
 # Create and configure PulseAudio
 mkdir -p /tmp/pulse
@@ -46,7 +36,6 @@ python -m pip install --upgrade pip
 pip install setuptools wheel
 pip install -r requirements.txt
 
-# Start the application with Gunicorn
+# Start the application
 echo "Starting application..."
-cd /home/site/wwwroot
-gunicorn --bind=0.0.0.0:8000 --timeout 600 --workers 1 --worker-class gthread --threads 4 --log-level info --chdir /home/site/wwwroot wsgi:app 
+gunicorn --bind=0.0.0.0:8000 --timeout 600 --workers 4 --log-level info --chdir /home/site/wwwroot wsgi:app 
