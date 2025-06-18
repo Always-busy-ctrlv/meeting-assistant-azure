@@ -23,7 +23,7 @@ from werkzeug.exceptions import HTTPException
 import openai
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
-from openai import AzureOpenAI
+from azure.openai import AzureOpenAI
 from azure.storage.blob import BlobServiceClient
 from azure.cosmos import CosmosClient
 from azure.search.documents import SearchClient
