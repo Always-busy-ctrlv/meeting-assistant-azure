@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meeting Assistant</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        button:disabled {
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+        #transcript {
+            border: 1px solid #ccc;
+            padding: 20px;
+            height: 300px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            white-space: pre-wrap;
+        }
+        #summaryContainer {
+            border: 1px solid #ccc;
+            padding: 20px;
+            margin-bottom: 20px;
+            white-space: pre-wrap;
+        }
+        #emailSection {
+            display: none;
+            border: 1px solid #ccc;
+            padding: 20px;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            background-color: white;
+            margin: 15% auto;
+            padding: 20px;
+            width: 70%;
+            max-width: 600px;
+        }
+        textarea {
+            width: 100%;
+            height: 200px;
+            margin: 10px 0;
+        }
+        #status {
+            margin-top: 10px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-800">Meeting Assistant</h1>
+            <p class="text-gray-600 mt-2">Real-time transcription and analysis</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Live Transcript Section -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">Live Transcript</h2>
+                <div id="transcript" class="h-96 overflow-y-auto bg-gray-50 p-4 rounded-lg mb-4">
+                    <p class="text-gray-500 italic">Transcript will appear here...</p>
+                </div>
+                <div class="flex justify-center space-x-4">
+                    <button id="startButton" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-6 rounded-lg transition duration-200">
+                        Start Meeting
+                    </button>
+                    <button id="endButton" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-lg transition duration-200" disabled>
+                        End Meeting
+                    </button>
+                </div>
+                <div id="status" class="mt-4 text-center text-gray-600"></div>
+            </div>
+
+            <!-- Summary Section -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">Meeting Summary</h2>
+                <div id="summaryContainer" class="h-96 overflow-y-auto bg-gray-50 p-4 rounded-lg">
+                    <p class="text-gray-500 italic">Summary will appear here after the meeting ends...</p>
+                </div>
+                <div id="emailSection" class="mt-4 hidden">
+                    <div class="mb-4">
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="emailInput">
+                            Participant Emails (comma-separated)
+                        </label>
+                        <input type="text" id="emailInput" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" placeholder="email1@example.com, email2@example.com">
+                    </div>
+                    <div class="flex justify-end space-x-4">
+                        <button id="editButton" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-lg transition duration-200">
+                            Edit Summary
+                        </button>
+                        <button id="sendEmailButton" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-6 rounded-lg transition duration-200">
+                            Send Email
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Summary Modal -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <h3>Edit Summary</h3>
+            <textarea id="editTextarea"></textarea>
+            <div class="button-group">
+                <button id="saveEditButton">Save</button>
+                <button id="cancelEditButton">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const startButton = document.getElementById('startButton');
+            const endButton = document.getElementById('endButton');
+            const transcriptDiv = document.getElementById('transcript');
+            const summaryContainer = document.getElementById('summaryContainer');
+            const emailSection = document.getElementById('emailSection');
+            const editButton = document.getElementById('editButton');
+            const sendEmailButton = document.getElementById('sendEmailButton');
+            const emailInput = document.getElementById('emailInput');
+            const editModal = document.getElementById('editModal');
+            const editTextarea = document.getElementById('editTextarea');
+            const saveEditButton = document.getElementById('saveEditButton');
+            const cancelEditButton = document.getElementById('cancelEditButton');
+            const emailStatus = document.getElementById('status');
+
+            // Connect to Socket.IO with debug logging
+            const socket = io({
+                transports: ['websocket'],
+                upgrade: false
+            });
+
+            // Socket.IO event handlers with debug logging
+            socket.on('connect', () => {
+                console.log('Connected to server');
+            });
+
+            socket.on('disconnect', () => {
+                console.log('Disconnected from server');
+            });
+
+            socket.on('connect_error', (error) => {
+                console.error('Connection error:', error);
+            });
+
+            socket.on('transcript_update', (data) => {
+                console.log('Received transcript update:', data);
+                if (data && data.text) {
+                    const p = document.createElement('p');
+                    p.className = 'mb-2';
+                    
+                    // Create timestamp span
+                    const timestampSpan = document.createElement('span');
+                    timestampSpan.className = 'text-gray-500 text-sm mr-2';
+                    timestampSpan.textContent = data.timestamp;
+                    
+                    // Create speaker span
+                    const speakerSpan = document.createElement('span');
+                    speakerSpan.className = 'font-semibold text-blue-600 mr-2';
+                    speakerSpan.textContent = data.speaker || 'Unknown Speaker';
+                    
+                    // Create text span
+                    const textSpan = document.createElement('span');
+                    textSpan.textContent = data.text;
+                    
+                    // Append all elements
+                    p.appendChild(timestampSpan);
+                    p.appendChild(speakerSpan);
+                    p.appendChild(textSpan);
+                    
+                    transcriptDiv.appendChild(p);
+                    transcriptDiv.scrollTop = transcriptDiv.scrollHeight;
+                } else {
+                    console.warn('Received invalid transcript update:', data);
+                }
+            });
+
+            socket.on('summary', (data) => {
+                console.log('Received summary:', data);
+                if (data && data.status === 'success' && data.summary) {
+                    // Format the summary with proper styling
+                    const formattedSummary = data.summary
+                        .replace(/([A-Za-z\s]+)'s Action Items:/g, '<h4 class="text-lg font-semibold text-blue-600 mt-4 mb-2">$1\'s Action Items:</h4>')
+                        .replace(/General Action Items:/g, '<h4 class="text-lg font-semibold text-purple-600 mt-4 mb-2">General Action Items:</h4>')
+                        .replace(/- (.*)/g, '<li class="ml-6 mb-1">$1</li>')
+                        .replace(/\n\n/g, '<br><br>');
+                    
+                    summaryContainer.innerHTML = `
+                        <h3 class="text-xl font-bold text-gray-800 mb-4">Meeting Summary</h3>
+                        <div class="prose max-w-none">
+                            ${formattedSummary}
+                        </div>
+                    `;
+                    emailSection.style.display = 'block';
+                } else {
+                    summaryContainer.innerHTML = `
+                        <h3 class="text-xl font-bold text-red-600">Error</h3>
+                        <p class="text-gray-700">${data.message || 'Failed to generate summary'}</p>
+                    `;
+                }
+            });
+
+            // Start meeting
+            startButton.addEventListener('click', async () => {
+                try {
+                    console.log('Starting meeting...');
+                    const response = await fetch('/start_meeting', {
+                        method: 'POST'
+                    });
+                    const data = await response.json();
+                    console.log('Start meeting response:', data);
+                    
+                    if (data.status === 'success') {
+                        startButton.disabled = true;
+                        endButton.disabled = false;
+                        transcriptDiv.innerHTML = '';
+                        summaryContainer.innerHTML = '';
+                        emailSection.style.display = 'none';
+                    } else {
+                        alert('Error starting meeting: ' + data.message);
+                    }
+                } catch (error) {
+                    console.error('Error starting meeting:', error);
+                    alert('Error starting meeting');
+                }
+            });
+
+            // End meeting
+            endButton.addEventListener('click', async () => {
+                try {
+                    console.log('Ending meeting...');
+                    const response = await fetch('/end_meeting', {
+                        method: 'POST'
+                    });
+                    const data = await response.json();
+                    console.log('End meeting response:', data);
+                    
+                    if (data.status === 'success') {
+                        startButton.disabled = false;
+                        endButton.disabled = true;
+                        
+                        // Display the summary
+                        if (data.summary) {
+                            console.log('Displaying summary:', data.summary);
+                            summaryContainer.innerHTML = `<h3>Meeting Summary</h3><pre>${data.summary}</pre>`;
+                            emailSection.style.display = 'block';
+                        } else {
+                            console.warn('No summary in response:', data);
+                            summaryContainer.innerHTML = '<h3>Error</h3><p>No summary generated</p>';
+                        }
+                    } else {
+                        alert('Error ending meeting: ' + data.message);
+                    }
+                } catch (error) {
+                    console.error('Error ending meeting:', error);
+                    alert('Error ending meeting');
+                }
+            });
+
+            // Edit summary
+            editButton.addEventListener('click', () => {
+                const currentSummary = summaryContainer.querySelector('pre').textContent;
+                editTextarea.value = currentSummary;
+                editModal.style.display = 'block';
+            });
+
+            // Save edited summary
+            saveEditButton.addEventListener('click', () => {
+                const newSummary = editTextarea.value;
+                summaryContainer.querySelector('pre').textContent = newSummary;
+                editModal.style.display = 'none';
+            });
+
+            // Cancel editing
+            cancelEditButton.addEventListener('click', () => {
+                editModal.style.display = 'none';
+            });
+
+            // Send email
+            sendEmailButton.addEventListener('click', async () => {
+                const emails = emailInput.value.split(',').map(email => email.trim());
+                const summary = summaryContainer.querySelector('pre').textContent;
+
+                if (!emails.length || !summary) {
+                    alert('Please enter participant emails and ensure there is a summary');
+                    return;
+                }
+
+                try {
+                    emailStatus.textContent = 'Sending email...';
+                    const response = await fetch('/send_email', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            participants: emails,
+                            summary: summary
+                        })
+                    });
+                    const data = await response.json();
+                    
+                    if (data.status === 'success') {
+                        emailStatus.textContent = 'Email sent successfully!';
+                    } else {
+                        emailStatus.textContent = 'Error: ' + data.message;
+                    }
+                } catch (error) {
+                    console.error('Error sending email:', error);
+                    emailStatus.textContent = 'Error sending email';
+                }
+            });
+        });
+    </script>
+</body>
+</html> 
