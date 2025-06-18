@@ -21,6 +21,10 @@ from email_service import send_meeting_summary
 import logging
 from werkzeug.exceptions import HTTPException
 import openai
+import eventlet
+
+# Configure eventlet
+eventlet.monkey_patch()
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -71,7 +75,7 @@ validate_config()
 # Initialize Flask app
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 app.config['SECRET_KEY'] = os.urandom(24)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
 # Initialize database
 init_db()

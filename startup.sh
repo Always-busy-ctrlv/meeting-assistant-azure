@@ -51,4 +51,4 @@ pip install -r requirements.txt
 # Start the application with Gunicorn
 echo "Starting application..."
 cd /home/site/wwwroot
-gunicorn --bind=0.0.0.0:8000 --timeout 600 --workers 4 --threads 8 --worker-class gthread --log-level info --chdir /home/site/wwwroot wsgi:app 
+gunicorn --bind=0.0.0.0:8000 --timeout 600 --workers 1 --worker-class eventlet --log-level info --chdir /home/site/wwwroot wsgi:app 
