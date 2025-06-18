@@ -5,7 +5,7 @@ echo "Deploying Python application..."
 # Set environment variables
 export SCM_DO_BUILD_DURING_DEPLOYMENT=true
 export WEBSITE_RUN_FROM_PACKAGE=1
-export PYTHONPATH=/home/site/wwwroot
+export PYTHONPATH=/home/site/wwwroot/meeting-assistant-azure
 
 # Install system dependencies
 echo "Installing system dependencies..."
@@ -38,4 +38,4 @@ pip install -r requirements.txt
 
 # Start the application
 echo "Starting application..."
-gunicorn --bind=0.0.0.0:8000 --timeout 600 --workers 4 --log-level info --chdir /home/site/wwwroot wsgi:app 
+gunicorn --bind=0.0.0.0:8000 --timeout 600 --workers 4 --log-level info --chdir /home/site/wwwroot/meeting-assistant-azure wsgi:app 
